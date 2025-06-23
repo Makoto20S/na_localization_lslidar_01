@@ -78,6 +78,10 @@
 
 #include "lla_enu.hpp"
 
+// 函数声明
+void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg);
+void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in);
+
 // #include "matchRateCal/match_rate_cal.h"
 
 #define INIT_TIME           (0.1)
@@ -296,9 +300,7 @@ void calculateAndPublishTransform()
 void publishCurrentRobotPose()
 {
     if (current_robot_id == 0 || current_robot_id == 2) {
-        grid_map::inc_octree poseMsg;  // 保持原有类型
-        poseMsg.header.stamp = ros::Time::now();
-        poseMsg.header.frame_id = "camera_init";
+        grid_map::inc_octree poseMsg;
         poseMsg.robotID = "Base_ENU";
         
         // 从当前状态获取位姿
