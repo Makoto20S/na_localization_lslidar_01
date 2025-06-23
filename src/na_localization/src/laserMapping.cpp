@@ -82,6 +82,22 @@
 void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg);
 void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in);
 
+// 提前声明的关键变量
+/*** EKF inputs and output ***/
+extern MeasureGroup Measures;
+extern esekfom::esekf kf;
+extern state_ikfom state_point;
+extern state_ikfom state_point_last;//上一时刻的状态
+extern state_ikfom state_point_lastframe; // 上一关键帧的状态
+
+/***优化部分相关变量***/
+extern vector<pcl::PointCloud<PointType>::Ptr> surfCloudKeyFrames;   // 历史所有关键帧的平面点集合（降采样）
+extern pcl::PointCloud<PointType>::Ptr cloudKeyPoses3D;
+extern pcl::PointCloud<PointTypePose>::Ptr cloudKeyPoses6D;
+
+//重定位相关变量
+extern double max_z,min_z;//构图过程中最大高度与最低高度
+
 // #include "matchRateCal/match_rate_cal.h"
 
 #define INIT_TIME           (0.1)
@@ -387,14 +403,11 @@ KD_TREE<PointType> ikdtree2;
 V3D Lidar_T_wrt_IMU(Zero3d);
 M3D Lidar_R_wrt_IMU(Eye3d);
 
+// 移除extern声明，保留实际定义
 /*** EKF inputs and output ***/
 MeasureGroup Measures;
 
 esekfom::esekf kf;
-
-state_ikfom state_point;
-state_ikfom state_point_last;//上一时刻的状态
-state_ikfom state_point_lastframe; // 上一关键帧的状态
 double package_end_time_last = 0;
 Eigen::Vector3d pos_lid;  //估计的W系下的位置
 
@@ -408,13 +421,10 @@ nav_msgs::Odometry odom;
 
 shared_ptr<Preprocess> p_pre(new Preprocess());
 
+// 移除extern声明，保留实际定义
 /***优化部分相关变量***/
 float transformTobeMapped[6]; //  当前帧的位姿(world系下)
 
-vector<pcl::PointCloud<PointType>::Ptr> surfCloudKeyFrames;   // 历史所有关键帧的平面点集合（降采样）
-
-pcl::PointCloud<PointType>::Ptr cloudKeyPoses3D(new pcl::PointCloud<PointType>());         // 历史关键帧位姿（位置）
-pcl::PointCloud<PointTypePose>::Ptr cloudKeyPoses6D(new pcl::PointCloud<PointTypePose>()); // 历史关键帧位姿
 pcl::PointCloud<PointType>::Ptr copy_cloudKeyPoses3D(new pcl::PointCloud<PointType>());
 pcl::PointCloud<PointTypePose>::Ptr copy_cloudKeyPoses6D(new pcl::PointCloud<PointTypePose>());
 
@@ -454,7 +464,8 @@ bool flag_rtkpos=false;
 bool flag_rtkheading = false;
 //bfsreloc
 double search_radius = 10.0;
-double max_z = 0,min_z = 0;//构图过程中最大高度与最低高度
+// 移除extern声明，保留实际定义
+// double max_z = 0,min_z = 0;//构图过程中最大高度与最低高度
 bool flag_relocbfs = false;
 // pcl::PointCloud<PointType>::Ptr ds_pl_orig (new pcl::PointCloud<PointType>());//声明源点云
 pcl::PointCloud<PointType>::Ptr pointcloudmap(new pcl::PointCloud<PointType>());//地图点云
