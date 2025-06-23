@@ -84,19 +84,19 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in);
 
 // 提前声明的关键变量
 /*** EKF inputs and output ***/
-extern MeasureGroup Measures;
-extern esekfom::esekf kf;
-extern state_ikfom state_point;
-extern state_ikfom state_point_last;//上一时刻的状态
-extern state_ikfom state_point_lastframe; // 上一关键帧的状态
+MeasureGroup Measures;
+esekfom::esekf kf;
+state_ikfom state_point;
+state_ikfom state_point_last;//上一时刻的状态
+state_ikfom state_point_lastframe; // 上一关键帧的状态
 
 /***优化部分相关变量***/
-extern vector<pcl::PointCloud<PointType>::Ptr> surfCloudKeyFrames;   // 历史所有关键帧的平面点集合（降采样）
-extern pcl::PointCloud<PointType>::Ptr cloudKeyPoses3D;
-extern pcl::PointCloud<PointTypePose>::Ptr cloudKeyPoses6D;
+vector<pcl::PointCloud<PointType>::Ptr> surfCloudKeyFrames;   // 历史所有关键帧的平面点集合（降采样）
+pcl::PointCloud<PointType>::Ptr cloudKeyPoses3D;
+pcl::PointCloud<PointTypePose>::Ptr cloudKeyPoses6D;
 
 //重定位相关变量
-extern double max_z,min_z;//构图过程中最大高度与最低高度
+double max_z,min_z;//构图过程中最大高度与最低高度
 
 // #include "matchRateCal/match_rate_cal.h"
 
