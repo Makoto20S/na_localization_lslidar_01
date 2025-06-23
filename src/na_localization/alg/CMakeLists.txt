@@ -1,0 +1,4 @@
+add_subdirectory(common)
+add_subdirectory(matchRateCal)
+add_subdirectory(localMapExtract)
+add_subdirectory(relocService)

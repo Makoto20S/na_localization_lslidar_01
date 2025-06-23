@@ -1,0 +1,10 @@
+{
+    "lidar_topic": "/lslidar_point_cloud",
+    "odom_topic": "/Odometry",
+    "filedirectory": "/home/nrc/na/Documents/20230425/DATA2/",
+
+    "point_map_directory": "/home/syx/111/na_localization_lslidar_01/src/na_localization/PCD/cloud_map",
+    "sc_map_directory": "/home/nrc/na/Documents/20230425/DATA2/",
+    "match_rate_threshold": 0.80,
+    "local_map_radius": 100.0
+}

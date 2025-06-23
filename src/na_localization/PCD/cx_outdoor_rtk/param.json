@@ -1,0 +1,9 @@
+{
+    "lidar_topic": "/lslidar_point_cloud",
+    "odom_topic": "/Odometry",
+    "filedirectory": "/home/firefly/Documents/20230425/DATA2/",
+    "point_map_directory": "/home/firefly/na_localization_lslidar/src/na_localization/PCD/cloud_map",
+    "sc_map_directory": "/home/firefly/Documents/20230425/DATA2/",
+    "match_rate_threshold": 0.80,
+    "local_map_radius": 100.0
+}

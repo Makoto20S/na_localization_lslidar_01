@@ -1,0 +1,62 @@
+common:
+#RS LiDar
+    lid_topic: "/lslidar_point_cloud"
+    imu_topic: "/imu"
+#    imu_topic: "yesense_imu/imu/data"
+    gnss_topic: "chattergps"
+    leg_topic: "/leg_odom"
+    # lid_topic: "/rslidar_points1"
+    # imu_topic: "/imu/data1"
+    time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
+    
+preprocess:
+    lidar_type: 2                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR, 4 RS
+    scan_line: 16
+    scan_rate: 10                # only need to be set for velodyne, unit: Hz,
+    timestamp_unit: 0                 # 0-second, 1-milisecond, 2-microsecond, 3-nanosecond.
+    blind: 0.8
+    
+mapping:
+    acc_cov: 0.1
+    gyr_cov: 0.1
+    b_acc_cov: 0.0001
+    b_gyr_cov: 0.0001
+    fov_degree:    180
+    det_range:     40
+    extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
+    extrinsic_T: [ 0.42, 0, 0]
+    extrinsic_R: [ 1, 0, 0,
+                   0, 1, 0,
+                   0, 0, 1]
+    rtk2Lidar_T: [0.0, 0.0, 0.05]
+
+publish:
+    path_en:  true
+    scan_publish_en:  true       # false: close all the point cloud output
+    dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
+    scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame
+
+surroundingkeyframeAddingDistThreshold: 1.0
+surroundingkeyframeAddingAngleThreshold: 0.2
+
+globalMapVisualizationSearchRadius: 50.0
+globalMapVisualizationPoseDensity: 2.0
+globalMapVisualizationLeafSize: 0.4
+
+# GPS Settings
+usertk: false
+gpsCovThreshold: 0.2
+poseCovThreshold: 0.01
+useGpsElevation: true
+
+#bfsreloc
+Search_Radius: 15.0 
+
+useleg: false
+Reposition_type: 2 #1 for rtk ,2 for manual
+
+numberOfCores: 2
+recontructKdTree: true
+loadmappath: "/home/firefly/na_localization_lslidar/src/na_localization/PCD/cloud_map.pcd"
+loadposepath: "/home/firefly/na_localization_lslidar/src/na_localization/PCD/pose.txt"
+params_filename: "/home/firefly/na_localization_lslidar/src/na_localization/PCD/param.json"

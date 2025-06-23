@@ -1,0 +1,49 @@
+common:
+#RS LiDar
+    lid_topic: "/rslidar_points"
+    imu_topic: "/imu/data"
+#    imu_topic: "yesense_imu/imu/data"
+    gnss_topic: "rtk_pos_raw"
+    gnss_heading_topic: "/rtk_heading_raw"
+    leg_topic: "/leg_odom"
+    # lid_topic: "/rslidar_points1"
+    # imu_topic: "/imu/data1"
+    time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
+    
+preprocess:
+    lidar_type: 4                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR, 4 RS
+    scan_line: 32
+    scan_rate: 10                # only need to be set for velodyne, unit: Hz,
+    blind: 0.2
+
+mapping:
+    acc_cov: 0.1
+    gyr_cov: 0.1
+    b_acc_cov: 0.0001
+    b_gyr_cov: 0.0001
+    fov_degree:    180
+    det_range:     40
+    extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
+    extrinsic_T: [ 0.233, 0, 0.1802] # 0 0 0
+    extrinsic_R: [ 1, 0, 0,
+                   0, 1, 0,
+                   0, 0, 1]
+    rtk2Lidar_T: [-0.231, -0.200, 0.4012] #-0.464, -0.200, 0.2045
+
+publish:
+    path_en:  true
+    scan_publish_en:  true       # false: close all the point cloud output
+    dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
+    scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame
+    visual_ikdtree: false
+# GPS Settings``
+usertk: true
+
+useleg: true
+Reposition_type: 1  #1 for rtk ,2 for manual
+
+numberOfCores: 2
+recontructKdTree: true
+loadmappath: "/home/firefly/na_mapping/src/na_mapping/PCD/cloud_map.pcd"
+loadposepath: "/home/firefly/na_mapping/src/na_mapping/PCD/pose.txt"
+

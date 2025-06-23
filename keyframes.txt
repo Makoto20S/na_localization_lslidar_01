@@ -1,0 +1,44 @@
+       //关键帧提取
+            if (isKeyFrame(state_point.pos, state_point_last.pos, state_point.rot.matrix(), state_point_last.rot.matrix(), keyframe_threshold_pos, keyframe_threshold_rot))
+            {
+                // 保存关键帧
+                PointTypePose keyframe_pose;
+                keyframe_pose.x=state_point.pos[0];
+                keyframe_pose.y=state_point.pos[1];
+                keyframe_pose.z=state_point.pos[2];
+                keyframe_pose.roll = atan2(state_point.rot.matrix()(2, 1), state_point.rot.matrix()(2, 2))* 180.0 / M_PI;//度
+                keyframe_pose.pitch = -asin(state_point.rot.matrix()(2, 0))* 180.0 / M_PI;
+                keyframe_pose.yaw = atan2(state_point.rot.matrix()(1, 0), state_point.rot.matrix()(0, 0))* 180.0 / M_PI;
+                keyframe_pose.time=lidar_end_time;
+                cloudKeyPoses6D->points.push_back(keyframe_pose);
+               
+/*////////////////////////////////////////////////////////////////////////////////////////////////////////*/
+                lio_sam::cloud_info keyframe_info;
+                sensor_msgs::PointCloud2 tempkeyCloud;
+                pcl::toROSMsg(*feats_down_body, tempkeyCloud);
+
+                tempkeyCloud.header.stamp.fromSec(lidar_end_time);
+                tempkeyCloud.header.frame_id = "camera_init";
+                keyframe_info.header = tempkeyCloud.header;
+                keyframe_info.cloud_deskewed = tempkeyCloud;//----原始点云用于sc
+                keyframe_info.cloud_corner.data.clear();
+                keyframe_info.cloud_surface = tempkeyCloud;//----原始点云用于回环icp
+
+                keyframe_info.initialGuessX =  keyframe_pose.x;//fast-lio-sam优化出的位姿
+                keyframe_info.initialGuessY =  keyframe_pose.y;
+                keyframe_info.initialGuessZ =  keyframe_pose.z;
+                keyframe_info.initialGuessRoll  =  keyframe_pose.roll;
+                keyframe_info.initialGuessPitch =  keyframe_pose.pitch;
+                keyframe_info.initialGuessYaw   =  keyframe_pose.yaw;
+                keyframe_info.imuRollInit  =  keyframe_pose.roll;
+                keyframe_info.imuPitchInit =  keyframe_pose.pitch;
+                keyframe_info.imuYawInit   =  keyframe_pose.yaw;
+                //cloudInfo.imuAvailable = cloudKeyPoses6D->size() - 1;
+                
+                pubKeyFrames.publish(keyframe_info);
+                
+                cout<<"keyframe true"<<endl;
+                ROS_INFO("keyframe:t=%lf,x=%f,y=%f,z=%f,roll=%f,pitch=%f,yaw=%f",keyframe_pose.time,keyframe_pose.x,keyframe_pose.y,keyframe_pose.z,keyframe_pose.roll,keyframe_pose.pitch,keyframe_pose.yaw); 
+            }
+
+

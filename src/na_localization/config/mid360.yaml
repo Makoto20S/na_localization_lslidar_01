@@ -1,0 +1,66 @@
+common:
+#RS LiDar
+    lid_topic: "/livox/lidar"
+    #imu_topic: "/IMU"
+    imu_topic: "/livox/imu"
+#    imu_topic: "yesense_imu/imu/data"
+    gnss_topic: "rtk_pos_raw"
+    gnss_heading_topic: "/rtk_heading_raw"
+    leg_topic: "/leg_odom"
+    # lid_topic: "/rslidar_points1"
+    # imu_topic: "/imu/data1"
+    time_sync_en : false         # ONLY turn on when external time synchronization is really not possible
+    pub_firstodo_en : false
+    
+preprocess:
+    lidar_type: 1                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR, 4 RS
+    scan_line: 6
+    scan_rate: 10                # only need to be set for velodyne, unit: Hz,
+    blind: 0.8
+
+mapping:
+    acc_cov: 0.1
+    gyr_cov: 0.1
+    b_acc_cov: 0.0001
+    b_gyr_cov: 0.0001
+    fov_degree:    90
+    det_range:     450
+    extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
+    extrinsic_T: [-0.12, 0, -0.00162] # 0 0 0
+    extrinsic_R: [ 1, 0, 0,
+                  0, 1, 0,
+                  0, 0, 1]
+    #宇树小狗
+    #extrinsic_T: [ 0.187, 0, 0.0803]
+    #extrinsic_R: [0.974,0,0.225,
+    #              0,1.0,0,
+    #              -0.225,0,0.974]  
+    rtk2Lidar_T: [-0.231, -0.200, 0.4012] #-0.464, -0.200, 0.2045
+
+publish:
+    path_en:  true
+    scan_publish_en:  true       # false: close all the point cloud output
+    dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
+    scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame
+    visual_ikdtree: false
+#bfsreloc
+#重定位查找半径，一般10够用，室外视情况而定可提高至15，室内地图较小杂点较多可改为5
+Search_Radius: 2 #室内查找半径
+Search_Radius_rtk: 30.0 #RTK室外查找半径
+
+# GPS Settings``
+usertk: false 
+
+useleg: true
+Reposition_type: 1  #1 for rtk ,2 for manual
+
+numberOfCores: 2
+recontructKdTree: true
+
+# loadmappath: "/home/firefly/na_localization/src/na_localization/PCD/ds_map.pcd"
+#loadmappath: "/home/unitree/111/na_localization_lslidar/src/na_localization/PCD/cloud_map.pcd"
+#loadposepath: "/home/unitree/111/na_localization_lslidar/src/na_localization/PCD/pose.txt"
+#params_filename: "/home/unitree/111/na_localization_lslidar/src/na_localization/PCD/param.json"
+loadmappath: "/home/syx/111/na_localization_lslidar_01/src/na_localization/PCD/cloud_map.pcd"
+loadposepath: "/home/syx/111/na_localization_lslidar_01/src/na_localization/PCD/pose.txt"
+params_filename: "/home/syx/111/na_localization_lslidar_01/src/na_localization/PCD/param.json"
