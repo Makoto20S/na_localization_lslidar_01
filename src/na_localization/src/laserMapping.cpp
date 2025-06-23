@@ -405,9 +405,7 @@ M3D Lidar_R_wrt_IMU(Eye3d);
 
 // 移除extern声明，保留实际定义
 /*** EKF inputs and output ***/
-MeasureGroup Measures;
 
-esekfom::esekf kf;
 double package_end_time_last = 0;
 Eigen::Vector3d pos_lid;  //估计的W系下的位置
 
