@@ -2805,7 +2805,7 @@ extrinR = result_vector;
                     MM.set_input_PCD(temp_pcd_path);
                     MM.voxel_process();
                     
-                    cout << "Loaded shared map data for relocalization, starting relocalization..." << endl;
+                    cout << "已加载共享地图数据，开始重定位..." << endl;
                     enter_key_pressed = false; // 重置标志
                 }
             }
@@ -3236,6 +3236,31 @@ extrinR = result_vector;
             save_data = true;
         }
     }
+
+    Eigen::Matrix3d Sigma_leg = Eigen::Matrix3d::Identity(); //leg里程计的协方差
+    double sigmaleg = 0.0025;//0.01
+    Sigma_leg(0, 0) = sigmaleg;
+    Sigma_leg(1, 1) = sigmaleg;
+    Sigma_leg(2, 2) = sigmaleg;
+
+    Eigen::Matrix3d Sigma_rtk = Eigen::Matrix3d::Identity(); //rtk的协方差
+    double sigmartk = 0.05*0.05;
+    Sigma_rtk(0, 0) = sigmartk;
+    Sigma_rtk(1, 1) = sigmartk;
+    Sigma_rtk(2, 2) = sigmartk;
+
+    Eigen::Vector3d z_leg = Eigen::Vector3d::Zero();
+    Eigen::Vector3d z_rtk = Eigen::Vector3d::Zero();
+
+    bool save_data = true;
+
+    double odo_time = 0;
+    int odo_cnt = 0;
+
+    signal(SIGINT, SigHandle);
+    ros::Rate rate(5000);
+    
+    int transform_calc_counter = 0;
 
     ikdtreethread.join();
     
