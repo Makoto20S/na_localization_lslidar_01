@@ -207,6 +207,7 @@ bool saveMapToMemory()
     mapping_completed = true;
     
     cout<<"save map to memory done"<<endl;
+    cout<<"已成功构建地图"<<endl;
     return true;
 }
 
@@ -221,6 +222,7 @@ bool getSharedMapData(pcl::PointCloud<PointType>::Ptr& mapData, double& maxZ, do
     *mapData = *shared_MapKeyFramesDS;
     maxZ = shared_max_z;
     minZ = shared_min_z;
+    cout<<"地图已传入id00"<<endl;  // 添加这行调试信息
     return true;
 }
 
