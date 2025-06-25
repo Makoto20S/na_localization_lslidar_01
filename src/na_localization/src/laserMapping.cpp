@@ -109,8 +109,8 @@ float  keyframe_threshold_pos=1,keyframe_threshold_rot = 0.2; //关键帧阈值�
 shared_ptr<LLAENU> gnss2enu(new LLAENU());
 
 // 添加robot_id相关变量
-std::string robot_id0 = "robot_0";
-std::string robot_id2 = "robot_2";
+// std::string robot_id0 = "jackal0";
+// std::string robot_id2 = "jackal2";
 int current_robot_id = 0; // 当前机器人ID
 
 // 地图数据传播相关变量
@@ -570,6 +570,7 @@ void livox_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg)
 // sensor_msgs::PointCloud2 overlap_cloud;
 // robot_0的点云回调函数
 void robot0_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
+    std::cout << "接收到id0的点云" << std::endl;
     if(current_robot_id == 0) {
         // 处理robot_0的点云数据
         standard_pcl_cbk(msg);
@@ -578,6 +579,7 @@ void robot0_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
 
 // robot_0的IMU回调函数
 void robot0_imu_cbk(const sensor_msgs::Imu::ConstPtr &msg) {
+    std::cout << "接收到id0的imu" << std::endl;
     if(current_robot_id == 0) {
         // 处理robot_0的IMU数据
         imu_cbk(msg);
@@ -586,6 +588,7 @@ void robot0_imu_cbk(const sensor_msgs::Imu::ConstPtr &msg) {
 
 // robot_2的点云回调函数
 void robot2_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
+    std::cout << "接收到id2的点云" << std::endl;
     if(current_robot_id == 2) {
         // 处理robot_2的点云数据
         standard_pcl_cbk(msg);
@@ -594,6 +597,7 @@ void robot2_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
 
 // robot_2的IMU回调函数
 void robot2_imu_cbk(const sensor_msgs::Imu::ConstPtr &msg) {
+    std::cout << "接收到id2的imu" << std::endl;
     if(current_robot_id == 2) {
         // 处理robot_2的IMU数据
         imu_cbk(msg);
@@ -2596,12 +2600,12 @@ extrinR = result_vector;
     
     // 根据robot_id订阅主要处理的话题
     if(current_robot_id == 2) {
-        sub_pcl = nh.subscribe(robot_id2 + "/point_local_octree", 1, robot2_pcl_cbk);
-        sub_imu = nh.subscribe(robot_id2 + "/livox/imu", 200000, robot2_imu_cbk);
+        sub_pcl = nh.subscribe("/jackal2/lio_sam/mapping/cloud_info", 1, robot2_pcl_cbk);
+        // sub_imu = nh.subscribe("/jackal2/lio_sam/mapping/inc_octree", 200000, robot2_imu_cbk);
         cout << "Robot 2: Mapping mode activated" << endl;
     } else if(current_robot_id == 0) {
-        sub_pcl = nh.subscribe(robot_id0 + "/point_local_octree", 1, robot0_pcl_cbk);
-        sub_imu = nh.subscribe(robot_id0 + "/livox/imu", 200000, robot0_imu_cbk);
+        sub_pcl = nh.subscribe("/jackal0/lio_sam/mapping/cloud_info", 1, robot0_pcl_cbk);
+        // sub_imu = nh.subscribe("/jackal0/lio_sam/mapping/inc_octree", 200000, robot0_imu_cbk);
         cout << "Robot 0: Relocalization mode activated" << endl;
         
         // 启动键盘输入监听线程
@@ -2639,7 +2643,7 @@ extrinR = result_vector;
     pubSensorVaild = nh.advertise<na_localization::sensor_vaild>("/sensor_vaild", 100000); //发布目前传感器的可用性
     pubLocalizationVaild = nh.advertise<std_msgs::Bool>("/localization_vaild", 1000); //发布定位的有效性
     //发布全局地图,用来手动重定位
-    pubglobalmap = nh.advertise<sensor_msgs::PointCloud2>("/globalmap", 1);
+    pubglobalmap =nh.advertise<sensor_msgs::PointCloud2>("/globalmap",1);
     //发布定位结果的个数，用来统计定位频率
     ros::Publisher pubOdoCnt = nh.advertise<std_msgs::Int32>("/odometry_count", 100);
 
@@ -2692,10 +2696,10 @@ extrinR = result_vector;
     
 
     /*************************重定位****************************/
-    // string read_dir = loadmappath;
-    // pcl::PCDReader pcd_reader;
-    // pcd_reader.read(read_dir, *pointcloudmap);
-    // cout<<"read pcd success!"<<endl;
+    string read_dir = loadmappath;
+    pcl::PCDReader pcd_reader;
+    pcd_reader.read(read_dir, *pointcloudmap);
+    cout<<"read pcd success!"<<endl;
 
     pcl::VoxelGrid<PointType> downSizepointcloudmap;
     pcl::PointCloud<PointType>::Ptr DSpointcloudmap(new pcl::PointCloud<PointType>());//地图点云
@@ -2714,67 +2718,67 @@ extrinR = result_vector;
     globalmapmsg.header.frame_id = "camera_init"; //todo 这里发布一个从读取点云里面稀疏后的降采样点云 就是为了方便在RVIZ里面观察
 
     /****************加载地图******************/
-    // MM.set_ds_size(filter_size_map_min);
-    // MM.set_input_PCD(loadmappath);
-    // MM.voxel_process();
+    MM.set_ds_size(filter_size_map_min);
+    MM.set_input_PCD(loadmappath);
+    MM.voxel_process();
 
     /****************加载原始经纬高,最大/最小高度******************/
-    // if(!rtk_p0_init)
-    // {
-    //     std::ifstream inputFile(loadposepath);
-    //     double lat0, lon0, alt0;
-    //     if(inputFile >> lat0 >> lon0 >> alt0 >> max_z >>min_z) 
-    //     {
-    //         max_z = ceil(max_z);
-    //         min_z = floor(min_z);
-    //         printf("先验地图原点经纬度坐标： 经度 = %3.7lf; 纬度 =  %3.7lf;  高度 =  %3.3lf; 构图过程位姿最大高度 =  %2.2f; 构图过程位姿最小高度 =  %2.2f; \n", lon0, lat0, alt0, max_z, min_z);
-    //     }
-    //     if(lon0 == 0 || lat0 == 0 || alt0 == 0)
-    //     {
-    //         cout<<"无法读取地图rtk原点,需进行手动重定位"<<endl;
-    //     }
-    //     else if(usertk)
-    //     {
-    //         gnss2enu->SetOriginLLA(lon0*M_PI/180,lat0*M_PI/180,alt0); 
-    //     }
+    if(!rtk_p0_init)
+    {
+        std::ifstream inputFile(loadposepath);
+        double lat0, lon0, alt0;
+        if(inputFile >> lat0 >> lon0 >> alt0 >> max_z >>min_z) 
+        {
+            max_z = ceil(max_z);
+            min_z = floor(min_z);
+            printf("先验地图原点经纬度坐标： 经度 = %3.7lf; 纬度 =  %3.7lf;  高度 =  %3.3lf; 构图过程位姿最大高度 =  %2.2f; 构图过程位姿最小高度 =  %2.2f; \n", lon0, lat0, alt0, max_z, min_z);
+        }
+        if(lon0 == 0 || lat0 == 0 || alt0 == 0)
+        {
+            cout<<"无法读取地图rtk原点,需进行手动重定位"<<endl;
+        }
+        else if(usertk)
+        {
+            gnss2enu->SetOriginLLA(lon0*M_PI/180,lat0*M_PI/180,alt0); 
+        }
         
            
-    //     rtk_p0_init = true;
-    // }
+        rtk_p0_init = true;
+    }
 
     /****************************************/
     //重构ikd树的线程
     std::thread ikdtreethread(&ReikdtreeThread);
     
-    // ros::Rate ratemap(1); //todo 接上文 发布了一个在RVIZ里面方便观察的稀疏地图 （源自读取）要延迟1S 发布在RVIZ中 否则会RVIZ收不到
-    // ratemap.sleep();
-    // pubglobalmap.publish(globalmapmsg);
+    ros::Rate ratemap(1); //todo 接上文 发布了一个在RVIZ里面方便观察的稀疏地图 （源自读取）要延迟1S 发布在RVIZ中 否则会RVIZ收不到
+    ratemap.sleep();
+    pubglobalmap.publish(globalmapmsg);
     // ratemap.sleep();
     
-    // Eigen::Matrix3d Sigma_leg = Eigen::Matrix3d::Identity(); //leg里程计的协方差
-    // double sigmaleg = 0.0025;//0.01
-    // Sigma_leg(0, 0) = sigmaleg;
-    // Sigma_leg(1, 1) = sigmaleg;
-    // Sigma_leg(2, 2) = sigmaleg;
+    Eigen::Matrix3d Sigma_leg = Eigen::Matrix3d::Identity(); //leg里程计的协方差
+    double sigmaleg = 0.0025;//0.01
+    Sigma_leg(0, 0) = sigmaleg;
+    Sigma_leg(1, 1) = sigmaleg;
+    Sigma_leg(2, 2) = sigmaleg;
 
-    // Eigen::Matrix3d Sigma_rtk = Eigen::Matrix3d::Identity(); //rtk的协方差
-    // double sigmartk = 0.05*0.05;
-    // Sigma_rtk(0, 0) = sigmartk;
-    // Sigma_rtk(1, 1) = sigmartk;
-    // Sigma_rtk(2, 2) = sigmartk;
+    Eigen::Matrix3d Sigma_rtk = Eigen::Matrix3d::Identity(); //rtk的协方差
+    double sigmartk = 0.05*0.05;
+    Sigma_rtk(0, 0) = sigmartk;
+    Sigma_rtk(1, 1) = sigmartk;
+    Sigma_rtk(2, 2) = sigmartk;
 
-    // Eigen::Vector3d z_leg = Eigen::Vector3d::Zero();
-    // Eigen::Vector3d z_rtk = Eigen::Vector3d::Zero();
+    Eigen::Vector3d z_leg = Eigen::Vector3d::Zero();
+    Eigen::Vector3d z_rtk = Eigen::Vector3d::Zero();
 
-    // bool save_data = true;
+    bool save_data = true;
 
-    // double odo_time = 0;
-    // int odo_cnt = 0;
+    double odo_time = 0;
+    int odo_cnt = 0;
 
-    // signal(SIGINT, SigHandle);
-    // ros::Rate rate(5000);
+    signal(SIGINT, SigHandle);
+    ros::Rate rate(5000);
     
-    // int transform_calc_counter = 0;
+    int transform_calc_counter = 0;
 
     while (ros::ok())
     {
@@ -2805,7 +2809,7 @@ extrinR = result_vector;
                     MM.set_input_PCD(temp_pcd_path);
                     MM.voxel_process();
                     
-                    cout << "已加载共享地图数据，开始重定位..." << endl;
+                    cout << "Loaded shared map data for relocalization, starting relocalization..." << endl;
                     enter_key_pressed = false; // 重置标志
                 }
             }
@@ -3138,36 +3142,11 @@ extrinR = result_vector;
                             saveMapToMemory();
                             enter_key_pressed = false;
                             cout << "Map saved to memory by robot_2, robot_0 can now start localization" << endl;
-                            
-                            // 发布稀疏地图到RVIZ
-                            if(DSpointcloudmap && !DSpointcloudmap->empty()) {
-                                pcl::toROSMsg(*DSpointcloudmap, globalmapmsg);
-                                globalmapmsg.header.frame_id = "camera_init";
-                                globalmapmsg.header.stamp = ros::Time::now();
-                                
-                                // 延迟1秒发布，确保RVIZ能接收到
-                                ros::Rate ratemap(1);
-                                ratemap.sleep();
-                                pubglobalmap.publish(globalmapmsg);
-                                cout << "Sparse map published to RVIZ for robot_2" << endl;
-                            }
                         }
                         
-                        // 或者每50个关键帧自动保存并发布一次
+                        // 或者每50个关键帧自动保存一次
                         if(keyframe_count % 50 == 0 && keyframe_count > 0) {
                             saveMapToMemory();
-                            
-                            // 同样发布稀疏地图
-                            if(DSpointcloudmap && !DSpointcloudmap->empty()) {
-                                pcl::toROSMsg(*DSpointcloudmap, globalmapmsg);
-                                globalmapmsg.header.frame_id = "camera_init";
-                                globalmapmsg.header.stamp = ros::Time::now();
-                                
-                                ros::Rate ratemap(1);
-                                ratemap.sleep();
-                                pubglobalmap.publish(globalmapmsg);
-                                cout << "Auto sparse map published to RVIZ for robot_2" << endl;
-                            }
                         }
                     }
                     
@@ -3261,31 +3240,6 @@ extrinR = result_vector;
             save_data = true;
         }
     }
-
-    Eigen::Matrix3d Sigma_leg = Eigen::Matrix3d::Identity(); //leg里程计的协方差
-    double sigmaleg = 0.0025;//0.01
-    Sigma_leg(0, 0) = sigmaleg;
-    Sigma_leg(1, 1) = sigmaleg;
-    Sigma_leg(2, 2) = sigmaleg;
-
-    Eigen::Matrix3d Sigma_rtk = Eigen::Matrix3d::Identity(); //rtk的协方差
-    double sigmartk = 0.05*0.05;
-    Sigma_rtk(0, 0) = sigmartk;
-    Sigma_rtk(1, 1) = sigmartk;
-    Sigma_rtk(2, 2) = sigmartk;
-
-    Eigen::Vector3d z_leg = Eigen::Vector3d::Zero();
-    Eigen::Vector3d z_rtk = Eigen::Vector3d::Zero();
-
-    bool save_data = true;
-
-    double odo_time = 0;
-    int odo_cnt = 0;
-
-    signal(SIGINT, SigHandle);
-    ros::Rate rate(5000);
-    
-    int transform_calc_counter = 0;
 
     ikdtreethread.join();
     
