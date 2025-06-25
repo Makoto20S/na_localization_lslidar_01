@@ -2639,7 +2639,7 @@ extrinR = result_vector;
     pubSensorVaild = nh.advertise<na_localization::sensor_vaild>("/sensor_vaild", 100000); //发布目前传感器的可用性
     pubLocalizationVaild = nh.advertise<std_msgs::Bool>("/localization_vaild", 1000); //发布定位的有效性
     //发布全局地图,用来手动重定位
-    pubglobalmap =nh.advertise<sensor_msgs::PointCloud2>("/globalmap",1);
+    pubglobalmap = nh.advertise<sensor_msgs::PointCloud2>("/globalmap", 1);
     //发布定位结果的个数，用来统计定位频率
     ros::Publisher pubOdoCnt = nh.advertise<std_msgs::Int32>("/odometry_count", 100);
 
@@ -2751,30 +2751,30 @@ extrinR = result_vector;
     // pubglobalmap.publish(globalmapmsg);
     // ratemap.sleep();
     
-    // Eigen::Matrix3d Sigma_leg = Eigen::Matrix3d::Identity(); //leg里程计的协方差
-    // double sigmaleg = 0.0025;//0.01
-    // Sigma_leg(0, 0) = sigmaleg;
-    // Sigma_leg(1, 1) = sigmaleg;
-    // Sigma_leg(2, 2) = sigmaleg;
+    Eigen::Matrix3d Sigma_leg = Eigen::Matrix3d::Identity(); //leg里程计的协方差
+    double sigmaleg = 0.0025;//0.01
+    Sigma_leg(0, 0) = sigmaleg;
+    Sigma_leg(1, 1) = sigmaleg;
+    Sigma_leg(2, 2) = sigmaleg;
 
-    // Eigen::Matrix3d Sigma_rtk = Eigen::Matrix3d::Identity(); //rtk的协方差
-    // double sigmartk = 0.05*0.05;
-    // Sigma_rtk(0, 0) = sigmartk;
-    // Sigma_rtk(1, 1) = sigmartk;
-    // Sigma_rtk(2, 2) = sigmartk;
+    Eigen::Matrix3d Sigma_rtk = Eigen::Matrix3d::Identity(); //rtk的协方差
+    double sigmartk = 0.05*0.05;
+    Sigma_rtk(0, 0) = sigmartk;
+    Sigma_rtk(1, 1) = sigmartk;
+    Sigma_rtk(2, 2) = sigmartk;
 
-    // Eigen::Vector3d z_leg = Eigen::Vector3d::Zero();
-    // Eigen::Vector3d z_rtk = Eigen::Vector3d::Zero();
+    Eigen::Vector3d z_leg = Eigen::Vector3d::Zero();
+    Eigen::Vector3d z_rtk = Eigen::Vector3d::Zero();
 
-    // bool save_data = true;
+    bool save_data = true;
 
-    // double odo_time = 0;
-    // int odo_cnt = 0;
+    double odo_time = 0;
+    int odo_cnt = 0;
 
-    // signal(SIGINT, SigHandle);
-    // ros::Rate rate(5000);
+    signal(SIGINT, SigHandle);
+    ros::Rate rate(5000);
     
-    // int transform_calc_counter = 0;
+    int transform_calc_counter = 0;
 
     while (ros::ok())
     {
@@ -3138,11 +3138,36 @@ extrinR = result_vector;
                             saveMapToMemory();
                             enter_key_pressed = false;
                             cout << "Map saved to memory by robot_2, robot_0 can now start localization" << endl;
+                            
+                            // 发布稀疏地图到RVIZ
+                            if(DSpointcloudmap && !DSpointcloudmap->empty()) {
+                                pcl::toROSMsg(*DSpointcloudmap, globalmapmsg);
+                                globalmapmsg.header.frame_id = "camera_init";
+                                globalmapmsg.header.stamp = ros::Time::now();
+                                
+                                // 延迟1秒发布，确保RVIZ能接收到
+                                ros::Rate ratemap(1);
+                                ratemap.sleep();
+                                pubglobalmap.publish(globalmapmsg);
+                                cout << "Sparse map published to RVIZ for robot_2" << endl;
+                            }
                         }
                         
-                        // 或者每50个关键帧自动保存一次
+                        // 或者每50个关键帧自动保存并发布一次
                         if(keyframe_count % 50 == 0 && keyframe_count > 0) {
                             saveMapToMemory();
+                            
+                            // 同样发布稀疏地图
+                            if(DSpointcloudmap && !DSpointcloudmap->empty()) {
+                                pcl::toROSMsg(*DSpointcloudmap, globalmapmsg);
+                                globalmapmsg.header.frame_id = "camera_init";
+                                globalmapmsg.header.stamp = ros::Time::now();
+                                
+                                ros::Rate ratemap(1);
+                                ratemap.sleep();
+                                pubglobalmap.publish(globalmapmsg);
+                                cout << "Auto sparse map published to RVIZ for robot_2" << endl;
+                            }
                         }
                     }
                     
