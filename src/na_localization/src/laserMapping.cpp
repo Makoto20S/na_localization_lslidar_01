@@ -2697,21 +2697,21 @@ extrinR = result_vector;
     // pcd_reader.read(read_dir, *pointcloudmap);
     // cout<<"read pcd success!"<<endl;
 
-    // pcl::VoxelGrid<PointType> downSizepointcloudmap;
-    // pcl::PointCloud<PointType>::Ptr DSpointcloudmap(new pcl::PointCloud<PointType>());//地图点云
+    pcl::VoxelGrid<PointType> downSizepointcloudmap;
+    pcl::PointCloud<PointType>::Ptr DSpointcloudmap(new pcl::PointCloud<PointType>());//地图点云
 
-    // downSizepointcloudmap.setInputCloud(pointcloudmap);
-    // downSizepointcloudmap.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
-    // downSizepointcloudmap.filter(*pointcloudmap);
+    downSizepointcloudmap.setInputCloud(pointcloudmap);
+    downSizepointcloudmap.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
+    downSizepointcloudmap.filter(*pointcloudmap);
 
-    // //需要对地图点云降采样，不然在rviz里显示太卡
-    // downSizepointcloudmap.setInputCloud(pointcloudmap);
-    // downSizepointcloudmap.setLeafSize(1.0f, 1.0f, 1.0f);
-    // downSizepointcloudmap.filter(*DSpointcloudmap);
+    //需要对地图点云降采样，不然在rviz里显示太卡
+    downSizepointcloudmap.setInputCloud(pointcloudmap);
+    downSizepointcloudmap.setLeafSize(1.0f, 1.0f, 1.0f);
+    downSizepointcloudmap.filter(*DSpointcloudmap);
 
-    // // sensor_msgs::PointCloud2 globalmapmsg;
-    // pcl::toROSMsg(*DSpointcloudmap, globalmapmsg);
-    // globalmapmsg.header.frame_id = "camera_init"; //todo 这里发布一个从读取点云里面稀疏后的降采样点云 就是为了方便在RVIZ里面观察
+    // sensor_msgs::PointCloud2 globalmapmsg;
+    pcl::toROSMsg(*DSpointcloudmap, globalmapmsg);
+    globalmapmsg.header.frame_id = "camera_init"; //todo 这里发布一个从读取点云里面稀疏后的降采样点云 就是为了方便在RVIZ里面观察
 
     /****************加载地图******************/
     // MM.set_ds_size(filter_size_map_min);
@@ -2751,30 +2751,30 @@ extrinR = result_vector;
     // pubglobalmap.publish(globalmapmsg);
     // ratemap.sleep();
     
-    Eigen::Matrix3d Sigma_leg = Eigen::Matrix3d::Identity(); //leg里程计的协方差
-    double sigmaleg = 0.0025;//0.01
-    Sigma_leg(0, 0) = sigmaleg;
-    Sigma_leg(1, 1) = sigmaleg;
-    Sigma_leg(2, 2) = sigmaleg;
+    // Eigen::Matrix3d Sigma_leg = Eigen::Matrix3d::Identity(); //leg里程计的协方差
+    // double sigmaleg = 0.0025;//0.01
+    // Sigma_leg(0, 0) = sigmaleg;
+    // Sigma_leg(1, 1) = sigmaleg;
+    // Sigma_leg(2, 2) = sigmaleg;
 
-    Eigen::Matrix3d Sigma_rtk = Eigen::Matrix3d::Identity(); //rtk的协方差
-    double sigmartk = 0.05*0.05;
-    Sigma_rtk(0, 0) = sigmartk;
-    Sigma_rtk(1, 1) = sigmartk;
-    Sigma_rtk(2, 2) = sigmartk;
+    // Eigen::Matrix3d Sigma_rtk = Eigen::Matrix3d::Identity(); //rtk的协方差
+    // double sigmartk = 0.05*0.05;
+    // Sigma_rtk(0, 0) = sigmartk;
+    // Sigma_rtk(1, 1) = sigmartk;
+    // Sigma_rtk(2, 2) = sigmartk;
 
-    Eigen::Vector3d z_leg = Eigen::Vector3d::Zero();
-    Eigen::Vector3d z_rtk = Eigen::Vector3d::Zero();
+    // Eigen::Vector3d z_leg = Eigen::Vector3d::Zero();
+    // Eigen::Vector3d z_rtk = Eigen::Vector3d::Zero();
 
-    bool save_data = true;
+    // bool save_data = true;
 
-    double odo_time = 0;
-    int odo_cnt = 0;
+    // double odo_time = 0;
+    // int odo_cnt = 0;
 
-    signal(SIGINT, SigHandle);
-    ros::Rate rate(5000);
+    // signal(SIGINT, SigHandle);
+    // ros::Rate rate(5000);
     
-    int transform_calc_counter = 0;
+    // int transform_calc_counter = 0;
 
     while (ros::ok())
     {
