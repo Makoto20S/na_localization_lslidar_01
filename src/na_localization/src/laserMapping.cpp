@@ -621,7 +621,16 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
     }
 
     PointCloudXYZI::Ptr  ptr(new PointCloudXYZI());
-    p_pre->process(msg, ptr);
+    
+    // 检查是否是八叉树转换的点云（通过frame_id标识）
+    if(msg->header.frame_id == "map") {
+        // 直接转换，跳过预处理
+        pcl::fromROSMsg(*msg, *ptr);
+        cout<<"Received octree converted point cloud, skipping preprocessing"<<endl;
+    } else {
+        // 原有的预处理流程
+        p_pre->process(msg, ptr);
+    }
 
     //************将点云由左后上转到前左上*******************/
     // for(auto& point : ptr->points)
