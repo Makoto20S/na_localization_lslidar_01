@@ -560,6 +560,11 @@ void IncOctreeProcess::Trans_pts_to_lidar(pcl::PointCloud<PointType>& cloud_tran
             cloud_pub->points[i].y = T_l_w(1, 0) * cloud_trans.points.at(i).x + T_l_w(1, 1) * cloud_trans.points.at(i).y + T_l_w(1, 2) * cloud_trans.points.at(i).z + T_l_w(1, 3);
             cloud_pub->points[i].z = T_l_w(2, 0) * cloud_trans.points.at(i).x + T_l_w(2, 1) * cloud_trans.points.at(i).y + T_l_w(2, 2) * cloud_trans.points.at(i).z + T_l_w(2, 3);
             cloud_pub->points[i].intensity = 100;
+            // 添加以下四行来初始化缺失的字段
+            cloud_pub->points[i].normal_x = 0.0;
+            cloud_pub->points[i].normal_y = 0.0;
+            cloud_pub->points[i].normal_z = 0.0;
+            cloud_pub->points[i].curvature = 0.0;
         }
 }
 
