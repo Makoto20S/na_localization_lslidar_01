@@ -2501,7 +2501,7 @@ int main(int argc, char** argv)
     ros::NodeHandle nh;
 
     // 读取robot_id参数
-    nh.param<int>("robot_id", current_robot_id, 0);
+    nh.param<int>("robot_id", current_robot_id, 2);
     cout << "Current robot_id: " << current_robot_id << endl;
 
     nh.param<bool>("publish/path_en",path_en, true);
@@ -2600,11 +2600,11 @@ extrinR = result_vector;
     
     // 根据robot_id订阅主要处理的话题
     if(current_robot_id == 2) {
-        sub_pcl = nh.subscribe("/jackal2/lio_sam/mapping/cloud_info", 1, robot2_pcl_cbk);
+        sub_pcl = nh.subscribe("/jackal2/point_local_octree", 1, robot2_pcl_cbk);
         // sub_imu = nh.subscribe("/jackal2/lio_sam/mapping/inc_octree", 200000, robot2_imu_cbk);
         cout << "Robot 2: Mapping mode activated" << endl;
     } else if(current_robot_id == 0) {
-        sub_pcl = nh.subscribe("/jackal0/lio_sam/mapping/cloud_info", 1, robot0_pcl_cbk);
+        sub_pcl = nh.subscribe("/jackal0/point_local_octree", 1, robot0_pcl_cbk);
         // sub_imu = nh.subscribe("/jackal0/lio_sam/mapping/inc_octree", 200000, robot0_imu_cbk);
         cout << "Robot 0: Relocalization mode activated" << endl;
         
