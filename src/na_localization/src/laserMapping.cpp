@@ -3145,6 +3145,13 @@ extrinR = result_vector;
                     
                     // robot_2的构图逻辑
                     if(current_robot_id == 2) {
+                        // 添加构图开始提示
+                        static bool mapping_started = false;
+                        if(!mapping_started) {
+                            cout << "已经开始构图 - Robot ID 02 进入构图循环" << endl;
+                            mapping_started = true;
+                        }
+                        
                         // 检查是否按下回车键来保存地图
                         std::lock_guard<std::mutex> lock(enter_key_mutex);
                         if(enter_key_pressed) {
