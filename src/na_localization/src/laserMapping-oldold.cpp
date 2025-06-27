@@ -20,7 +20,6 @@
 #include <tf/transform_datatypes.h>
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/Vector3.h>
-#include <geometry_msgs/PoseArray.h>
 #include <livox_ros_driver/CustomMsg.h>
 #include "preprocess.h"
 #include <ikd-Tree/ikd_Tree.h>
@@ -53,7 +52,6 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
-#include <cstring>
 
 #include "GNSS_Processing.hpp"
 #include <sensor_msgs/NavSatFix.h>
@@ -63,9 +61,6 @@
 
 #include <std_msgs/Bool.h>
 #include <std_msgs/Int32.h>
-#include <std_msgs/String.h>
-#include <chrono>
-#include <thread>
 
 #include <GeographicLib/UTMUPS.hpp>
 
@@ -78,26 +73,6 @@
 
 #include "lla_enu.hpp"
 
-// 函数声明
-void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg);
-void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in);
-
-// 提前声明的关键变量
-/*** EKF inputs and output ***/
-MeasureGroup Measures;
-esekfom::esekf kf;
-state_ikfom state_point;
-state_ikfom state_point_last;//上一时刻的状态
-state_ikfom state_point_lastframe; // 上一关键帧的状态
-
-/***优化部分相关变量***/
-vector<pcl::PointCloud<PointType>::Ptr> surfCloudKeyFrames;   // 历史所有关键帧的平面点集合（降采样）
-pcl::PointCloud<PointType>::Ptr cloudKeyPoses3D;
-pcl::PointCloud<PointTypePose>::Ptr cloudKeyPoses6D;
-
-//重定位相关变量
-double max_z,min_z;//构图过程中最大高度与最低高度
-
 // #include "matchRateCal/match_rate_cal.h"
 
 #define INIT_TIME           (0.1)
@@ -107,238 +82,6 @@ double max_z,min_z;//构图过程中最大高度与最低高度
 #include "inc_octree.h"
 float  keyframe_threshold_pos=1,keyframe_threshold_rot = 0.2; //关键帧阈值，m 和 度
 shared_ptr<LLAENU> gnss2enu(new LLAENU());
-
-// 添加robot_id相关变量
-// std::string robot_id0 = "jackal0";
-// std::string robot_id2 = "jackal2";
-int current_robot_id = 0; // 当前机器人ID
-
-// 地图数据传播相关变量
-pcl::PointCloud<PointType>::Ptr shared_MapKeyFramesDS(new pcl::PointCloud<PointType>());
-double shared_max_z = 0.0;
-double shared_min_z = 0.0;
-bool map_data_ready = false;
-bool mapping_completed = false;
-std::mutex map_data_mutex;
-
-// 添加坐标变换相关变量
-double fusionTrans0[6]; // robot_0位姿: x,y,z,roll,pitch,yaw
-double fusionTrans2[6]; // robot_2位姿: x,y,z,roll,pitch,yaw
-bool rec_rb0 = false;   // 是否接收到robot_0位姿
-bool rec_rb2 = false;   // 是否接收到robot_2位姿
-std::mutex pose_mutex;  // 位姿数据互斥锁
-
-// 坐标变换发布器
-ros::Publisher pub_trans0; // 发布robot_0相对于robot_2的变换
-ros::Publisher pub_robot0_pose; // 发布robot_0位姿
-ros::Publisher pub_robot2_pose; // 发布robot_2位姿
-
-// 构图相关变量（从goutu文件移植）
-double globalMapVisualizationPoseDensity = 1.0;
-double globalMapVisualizationLeafSize = 0.4;
-ros::Publisher pubSavedCloud;
-ros::Publisher pubSavedPose;
-
-// 键盘输入监听相关
-bool enter_key_pressed = false;
-std::mutex enter_key_mutex;
-
-// 移植的saveMapService函数（修改为直接调用版本）
-bool saveMapToMemory()
-{
-    std::lock_guard<std::mutex> lock(map_data_mutex);
-    
-    cout<<"start save map to memory"<<endl;
-
-    pcl::PointCloud<PointType>::Ptr MapKeyPosesDS(new pcl::PointCloud<PointType>());
-    pcl::PointCloud<PointType>::Ptr MapKeyFrames(new pcl::PointCloud<PointType>());
-
-    pcl::VoxelGrid<PointType> downSizeFilterMapKeyPoses;
-    downSizeFilterMapKeyPoses.setLeafSize(globalMapVisualizationPoseDensity, globalMapVisualizationPoseDensity, globalMapVisualizationPoseDensity);
-    downSizeFilterMapKeyPoses.setInputCloud(cloudKeyPoses3D);
-    downSizeFilterMapKeyPoses.filter(*MapKeyPosesDS);
-    
-    for (int i = 0; i < (int)MapKeyPosesDS->size(); ++i)
-    {
-        int thisKeyInd = (int)MapKeyPosesDS->points[i].intensity;
-        if(thisKeyInd < surfCloudKeyFrames.size()) {
-            *MapKeyFrames += *surfCloudKeyFrames[thisKeyInd];
-        }
-    }
-
-    pcl::VoxelGrid<PointType> downSizeFilterGlobalMapKeyFrames;
-    downSizeFilterGlobalMapKeyFrames.setLeafSize(globalMapVisualizationLeafSize, globalMapVisualizationLeafSize, globalMapVisualizationLeafSize);
-    downSizeFilterGlobalMapKeyFrames.setInputCloud(MapKeyFrames);
-    downSizeFilterGlobalMapKeyFrames.filter(*shared_MapKeyFramesDS);
-
-    shared_max_z = max_z;
-    shared_min_z = min_z;
-    
-    // 发布地图点云
-    sensor_msgs::PointCloud2 cloudMsg;
-    pcl::toROSMsg(*shared_MapKeyFramesDS, cloudMsg);
-    cloudMsg.header.stamp = ros::Time::now();
-    cloudMsg.header.frame_id = "camera_init";
-    pubSavedCloud.publish(cloudMsg);
-
-    // 发布位姿信息
-    geometry_msgs::PoseArray poseMsg;  // 确保正确的类型声明
-    poseMsg.header.stamp = ros::Time::now();
-    poseMsg.header.frame_id = "camera_init";
-    
-    for(int i = 0; i < cloudKeyPoses6D->size(); i++) {
-        geometry_msgs::Pose pose;
-        pose.position.x = cloudKeyPoses6D->points[i].x;
-        pose.position.y = cloudKeyPoses6D->points[i].y;
-        pose.position.z = cloudKeyPoses6D->points[i].z;
-        
-        tf::Quaternion q;
-        q.setRPY(cloudKeyPoses6D->points[i].roll, cloudKeyPoses6D->points[i].pitch, cloudKeyPoses6D->points[i].yaw);
-        pose.orientation.x = q.x();
-        pose.orientation.y = q.y();
-        pose.orientation.z = q.z();
-        pose.orientation.w = q.w();
-        
-        poseMsg.poses.push_back(pose);
-    }
-    pubSavedPose.publish(poseMsg);
-
-    map_data_ready = true;
-    mapping_completed = true;
-    
-    cout<<"save map to memory done"<<endl;
-    cout<<"已成功构建地图"<<endl;
-    return true;
-}
-
-// 获取共享地图数据
-bool getSharedMapData(pcl::PointCloud<PointType>::Ptr& mapData, double& maxZ, double& minZ)
-{
-    std::lock_guard<std::mutex> lock(map_data_mutex);
-    if(!map_data_ready) {
-        return false;
-    }
-    
-    *mapData = *shared_MapKeyFramesDS;
-    maxZ = shared_max_z;
-    minZ = shared_min_z;
-    cout<<"地图已传入id00"<<endl;  // 添加这行调试信息
-    return true;
-}
-
-// 键盘输入监听线程
-void keyboardInputThread()
-{
-    while(ros::ok()) {
-        char input = getchar();
-        if(input == '\n') {
-            std::lock_guard<std::mutex> lock(enter_key_mutex);
-            enter_key_pressed = true;
-            cout << "Enter key pressed, enabling relocalization for robot_0" << endl;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-}
-
-// robot_0位姿回调函数
-void robot0PoseHandler(const grid_map::inc_octree::ConstPtr& TransMsg) 
-{
-    std::lock_guard<std::mutex> lock(pose_mutex);
-    if (TransMsg->robotID == "Base_ENU") {
-        std::cout << "receive robot_0 pose: " << TransMsg->poseX << ", " << TransMsg->poseY << ", " << TransMsg->poseZ 
-                  << ", " << TransMsg->poseRoll << ", " << TransMsg->posePitch << ", " << TransMsg->poseYaw << std::endl;
-        
-        fusionTrans0[0] = TransMsg->poseX;
-        fusionTrans0[1] = TransMsg->poseY;
-        fusionTrans0[2] = TransMsg->poseZ;
-        fusionTrans0[3] = TransMsg->poseRoll;
-        fusionTrans0[4] = TransMsg->posePitch;
-        fusionTrans0[5] = TransMsg->poseYaw;
-        rec_rb0 = true;
-    }
-}
-
-// robot_2位姿回调函数
-void robot2PoseHandler(const grid_map::inc_octree::ConstPtr& TransMsg) 
-{
-    std::lock_guard<std::mutex> lock(pose_mutex);
-    if (TransMsg->robotID == "Base_ENU") {
-        std::cout << "receive robot_2 pose: " << TransMsg->poseX << ", " << TransMsg->poseY << ", " << TransMsg->poseZ 
-                  << ", " << TransMsg->poseRoll << ", " << TransMsg->posePitch << ", " << TransMsg->poseYaw << std::endl;
-        
-        fusionTrans2[0] = TransMsg->poseX;
-        fusionTrans2[1] = TransMsg->poseY;
-        fusionTrans2[2] = TransMsg->poseZ;
-        fusionTrans2[3] = TransMsg->poseRoll;
-        fusionTrans2[4] = TransMsg->posePitch;
-        fusionTrans2[5] = TransMsg->poseYaw;
-        rec_rb2 = true;
-    }
-}
-// 计算并发布坐标变换
-void calculateAndPublishTransform() 
-{
-    std::lock_guard<std::mutex> lock(pose_mutex);
-    
-    if (!rec_rb0 || !rec_rb2) {
-        return; // 等待两个机器人的位姿都接收到
-    }
-    
-    // 使用PCL计算变换矩阵
-    Eigen::Affine3f rb0_GL = pcl::getTransformation(fusionTrans0[0], fusionTrans0[1], fusionTrans0[2], 
-                                                    fusionTrans0[3], fusionTrans0[4], fusionTrans0[5]);
-    Eigen::Affine3f rb2_GL = pcl::getTransformation(fusionTrans2[0], fusionTrans2[1], fusionTrans2[2], 
-                                                    fusionTrans2[3], fusionTrans2[4], fusionTrans2[5]);
-    
-    // 计算robot_0相对于robot_2的变换
-    Eigen::Affine3f pose0_to_base2 = rb2_GL.inverse() * rb0_GL;
-    
-    float rb0_to_base2[6];
-    pcl::getTranslationAndEulerAngles(pose0_to_base2, rb0_to_base2[0], rb0_to_base2[1], rb0_to_base2[2], 
-                                     rb0_to_base2[3], rb0_to_base2[4], rb0_to_base2[5]);
-    
-    std::cout << "robot_0 to robot_2 transform: " << rb0_to_base2[0] << ", " << rb0_to_base2[1] << ", " << rb0_to_base2[2] 
-              << ", " << rb0_to_base2[3] << ", " << rb0_to_base2[4] << ", " << rb0_to_base2[5] << std::endl;
-    
-    // 发布变换
-    nav_msgs::Odometry Robot0_to_base2;
-    Robot0_to_base2.header.stamp = ros::Time::now();
-    Robot0_to_base2.header.frame_id = "jackal0/base_link";
-    Robot0_to_base2.child_frame_id = "jackal0/base_link/odom2map";
-    
-    Robot0_to_base2.pose.pose.position.x = rb0_to_base2[0];
-    Robot0_to_base2.pose.pose.position.y = rb0_to_base2[1];
-    Robot0_to_base2.pose.pose.position.z = rb0_to_base2[2];
-    Robot0_to_base2.pose.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(rb0_to_base2[3], rb0_to_base2[4], rb0_to_base2[5]);
-    
-    pub_trans0.publish(Robot0_to_base2);
-}
-
-// 发布当前机器人位姿到inc_octree话题
-void publishCurrentRobotPose()
-{
-    if (current_robot_id == 0 || current_robot_id == 2) {
-        grid_map::inc_octree poseMsg;
-        poseMsg.robotID = "Base_ENU";
-        
-        // 从当前状态获取位姿
-        poseMsg.poseX = state_point.pos[0];
-        poseMsg.poseY = state_point.pos[1];
-        poseMsg.poseZ = state_point.pos[2];
-        
-        // 将旋转矩阵转换为欧拉角
-        Eigen::Vector3d euler = state_point.rot.matrix().eulerAngles(0, 1, 2);
-        poseMsg.poseRoll = euler[0];
-        poseMsg.posePitch = euler[1];
-        poseMsg.poseYaw = euler[2];
-        
-        if (current_robot_id == 0) {
-            pub_robot0_pose.publish(poseMsg);
-        } else if (current_robot_id == 2) {
-            pub_robot2_pose.publish(poseMsg);
-        }
-    }
-}
 /*** Time Log Variables ***/
 int    add_point_size = 0, kdtree_delete_counter = 0;
 bool   pcd_save_en = false, time_sync_en = false, extrinsic_est_en = true, path_en = true;
@@ -405,9 +148,14 @@ KD_TREE<PointType> ikdtree2;
 V3D Lidar_T_wrt_IMU(Zero3d);
 M3D Lidar_R_wrt_IMU(Eye3d);
 
-// 移除extern声明，保留实际定义
 /*** EKF inputs and output ***/
+MeasureGroup Measures;
 
+esekfom::esekf kf;
+
+state_ikfom state_point;
+state_ikfom state_point_last;//上一时刻的状态
+state_ikfom state_point_lastframe; // 上一关键帧的状态
 double package_end_time_last = 0;
 Eigen::Vector3d pos_lid;  //估计的W系下的位置
 
@@ -421,10 +169,13 @@ nav_msgs::Odometry odom;
 
 shared_ptr<Preprocess> p_pre(new Preprocess());
 
-// 移除extern声明，保留实际定义
 /***优化部分相关变量***/
 float transformTobeMapped[6]; //  当前帧的位姿(world系下)
 
+vector<pcl::PointCloud<PointType>::Ptr> surfCloudKeyFrames;   // 历史所有关键帧的平面点集合（降采样）
+
+pcl::PointCloud<PointType>::Ptr cloudKeyPoses3D(new pcl::PointCloud<PointType>());         // 历史关键帧位姿（位置）
+pcl::PointCloud<PointTypePose>::Ptr cloudKeyPoses6D(new pcl::PointCloud<PointTypePose>()); // 历史关键帧位姿
 pcl::PointCloud<PointType>::Ptr copy_cloudKeyPoses3D(new pcl::PointCloud<PointType>());
 pcl::PointCloud<PointTypePose>::Ptr copy_cloudKeyPoses6D(new pcl::PointCloud<PointTypePose>());
 
@@ -464,8 +215,7 @@ bool flag_rtkpos=false;
 bool flag_rtkheading = false;
 //bfsreloc
 double search_radius = 10.0;
-// 移除extern声明，保留实际定义
-// double max_z = 0,min_z = 0;//构图过程中最大高度与最低高度
+double max_z = 0,min_z = 0;//构图过程中最大高度与最低高度
 bool flag_relocbfs = false;
 // pcl::PointCloud<PointType>::Ptr ds_pl_orig (new pcl::PointCloud<PointType>());//声明源点云
 pcl::PointCloud<PointType>::Ptr pointcloudmap(new pcl::PointCloud<PointType>());//地图点云
@@ -568,44 +318,6 @@ void livox_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg)
 }
 
 // sensor_msgs::PointCloud2 overlap_cloud;
-// robot_0的点云回调函数
-void robot0_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
-    std::cout << "接收到id0的点云" << std::endl;
-    if(current_robot_id == 0) {
-        // 处理robot_0的点云数据
-        standard_pcl_cbk(msg);
-        std::cout << "=====ID000=====" << std::endl;
-    }
-}
-
-// robot_0的IMU回调函数
-void robot0_imu_cbk(const sensor_msgs::Imu::ConstPtr &msg) {
-    std::cout << "接收到id0的imu" << std::endl;
-    if(current_robot_id == 0) {
-        // 处理robot_0的IMU数据
-        imu_cbk(msg);
-    }
-}
-
-// robot_2的点云回调函数
-void robot2_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
-    std::cout << "接收到id2的点云" << std::endl;
-    if(current_robot_id == 2) {
-        // 处理robot_2的点云数据
-        standard_pcl_cbk(msg);
-        std::cout << "=====ID222=====" << std::endl;
-    }
-}
-
-// robot_2的IMU回调函数
-void robot2_imu_cbk(const sensor_msgs::Imu::ConstPtr &msg) {
-    std::cout << "接收到id2的imu" << std::endl;
-    if(current_robot_id == 2) {
-        // 处理robot_2的IMU数据
-        imu_cbk(msg);
-    }
-}
-
 void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) 
 {
     //容错测试
@@ -623,16 +335,7 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
     }
 
     PointCloudXYZI::Ptr  ptr(new PointCloudXYZI());
-    
-    // 检查是否是八叉树转换的点云（通过frame_id标识）
-    if(msg->header.frame_id == "map") {
-        // 直接转换，跳过预处理
-        pcl::fromROSMsg(*msg, *ptr);
-        cout<<"Received octree converted point cloud, skipping preprocessing"<<endl;
-    } else {
-        // 原有的预处理流程
-        p_pre->process(msg, ptr);
-    }
+    p_pre->process(msg, ptr);
 
     //************将点云由左后上转到前左上*******************/
     // for(auto& point : ptr->points)
@@ -658,7 +361,6 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
         mtx_buffer.unlock();
         sig_buffer.notify_all();
         return;
-        std::cout<<"没有雷达数据"<<std::endl;
     }
         
     //定位程序需要避免缓存区数据堆积
@@ -2512,10 +2214,6 @@ int main(int argc, char** argv)
     ros::init(argc, argv, "laserMapping");
     ros::NodeHandle nh;
 
-    // 读取robot_id参数
-    nh.param<int>("robot_id", current_robot_id, 2);
-    cout << "Current robot_id: " << current_robot_id << endl;
-
     nh.param<bool>("publish/path_en",path_en, true);
     nh.param<bool>("publish/scan_publish_en",scan_pub_en, true);                // 是否发布当前正在扫描的点云的topic
     nh.param<bool>("publish/dense_publish_en",dense_pub_en, true);              // 是否发布经过运动畸变校正注册到IMU坐标系的点云的topic 
@@ -2593,10 +2291,6 @@ extrinR = result_vector;
 
     nh.param<bool>("chengxin_change", chengxin_change, false); //是否加入gps因子
     cout<<"chengxin_change = "<<chengxin_change<<endl;
-    
-    // 添加构图相关参数
-    nh.param<double>("globalMapVisualizationPoseDensity", globalMapVisualizationPoseDensity, 1.0);
-    nh.param<double>("globalMapVisualizationLeafSize", globalMapVisualizationLeafSize, 0.4);
 
     cout<<"Lidar_type: "<<p_pre->lidar_type<<endl;
     // 初始化path的header（包括时间戳和帧id），path用于保存odemetry的路径
@@ -2606,24 +2300,11 @@ extrinR = result_vector;
     int keyframe_count = 0;
     int frame_count = 0;
     /*** ROS subscribe initialization ***/
-    ros::Subscriber sub_pcl, sub_imu;
-    ros::Subscriber sub_robot2_pcl, sub_robot2_imu;
-    ros::Subscriber sub_robot0_pcl, sub_robot0_imu;
-
-    // 根据robot_id订阅主要处理的话题
-    if(current_robot_id == 2) {
-        sub_pcl = nh.subscribe("/jackal2/point_local_octree", 1, robot2_pcl_cbk);
-        cout << "Robot 2: 构图模式启动" << endl;
-
-        // 启动键盘输入监听线程 - 移动到这里更合理
-        std::thread keyboard_thread(keyboardInputThread);
-        keyboard_thread.detach();
-        cout << "键盘监听线程已启动，按回车键保存地图并通知robot_0开始重定位" << endl;
-    } else if(current_robot_id == 0) {
-        sub_pcl = nh.subscribe("/jackal0/point_local_octree", 1, robot0_pcl_cbk);
-        cout << "Robot 0: Relocalization mode activated" << endl;
-    }
-
+    ros::Subscriber sub_pcl = p_pre->lidar_type == 1 ? \
+        nh.subscribe(lid_topic, 1, livox_pcl_cbk) : \
+        nh.subscribe(lid_topic, 1, standard_pcl_cbk);
+    // ros::Subscriber sub_pcl = nh.subscribe(lid_topic, 1, standard_pcl_cbk);
+    ros::Subscriber sub_imu = nh.subscribe(imu_topic, 200000, imu_cbk);
     ros::Subscriber sub_gnss = nh.subscribe(gnss_topic, 200000, gnss_cbk_sensor_msgs_2enu); //gnss
 
     ros::Subscriber sub_gnss_heading = nh.subscribe(gnss_heading_topic, 200000, gnss_heading_cbk);   
@@ -2631,10 +2312,6 @@ extrinR = result_vector;
     ros::Subscriber sub_leg = nh.subscribe(leg_topic, 200000, leg_cbk); 
     // ros::Subscriber sub_ExterPos=nh.subscribe("/move_base_simple/goal",1,ExtPos_cbk); //手动重定位话题
     ros::Subscriber sub_ManualPos=nh.subscribe("/move_base_simple/goal",1,ManualPos_cbk); //手动重定位话题
-    
-    // 只订阅位姿话题用于坐标变换计算
-    ros::Subscriber sub_robot0_pose = nh.subscribe<grid_map::inc_octree>("/jackal0/lio_sam/mapping/inc_octree", 2000, robot0PoseHandler);
-    ros::Subscriber sub_robot2_pose = nh.subscribe<grid_map::inc_octree>("/jackal2/lio_sam/mapping/inc_octree", 2000, robot2PoseHandler);
     ros::Publisher pubLaserCloudFull = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100000);
     ros::Publisher pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered_body", 100000);
     ros::Publisher pubLaserCloudEffect = nh.advertise<sensor_msgs::PointCloud2>("/cloud_effected", 100000);
@@ -2667,29 +2344,9 @@ extrinR = result_vector;
     ros::Publisher pubKeyFrames = nh.advertise<lio_sam::cloud_info> ("/jackal0/lio_sam/mapping/cloud_info", 100);//发布关键帧的话题
     ros::Publisher pub_inc_octree_ = nh.advertise<grid_map::inc_octree>("/jackal0/lio_sam/mapping/inc_octree", 1);//发布0号车位姿
     
-    // 添加构图相关发布器
-    pubSavedCloud = nh.advertise<sensor_msgs::PointCloud2>("/saved_cloud", 100);
-    pubSavedPose = nh.advertise<std_msgs::String>("/saved_pose", 100);
-    
     //输出与web端通讯的相关标志位
     pubRelocal_flag =nh.advertise<std_msgs::Bool>("/Relocal_flag",1);/***重定位成功/失败标志位：true为成功、false为失败***/
     pubLocal_flag =nh.advertise<std_msgs::Bool>("/Local_flag",1);/***定位丢失标志位：true为成功、false为丢失***/
-    
-    // 初始化位姿数组
-    for(int i = 0; i < 6; i++) {
-        fusionTrans0[i] = 0.0;
-        fusionTrans2[i] = 0.0;
-    }
-    
-    // 添加坐标变换相关发布器
-    pub_trans0 = nh.advertise<nav_msgs::Odometry>("/jackal0/context/trans_map", 1);
-    
-    // 根据当前robot_id发布对应的位姿
-    if (current_robot_id == 0) {
-        pub_robot0_pose = nh.advertise<grid_map::inc_octree>("/jackal0/lio_sam/mapping/inc_octree", 1);
-    } else if (current_robot_id == 2) {
-        pub_robot2_pose = nh.advertise<grid_map::inc_octree>("/jackal2/lio_sam/mapping/inc_octree", 1);
-    }
     
     //string params_filename = string("/home/nrc/na/na_localization_lslidar/src/na_localization/PCD/param.json");
     reloc_plugin_ptr_ = std::make_shared<plugins::RelocPlugin>(nh, params_filename);    
@@ -2710,15 +2367,15 @@ extrinR = result_vector;
     /*************************重定位****************************/
     string read_dir = loadmappath;
     pcl::PCDReader pcd_reader;
-    // pcd_reader.read(read_dir, *pointcloudmap);
-    // cout<<"read pcd success!"<<endl;
+    pcd_reader.read(read_dir, *pointcloudmap);
+    cout<<"read pcd success!"<<endl;
 
     pcl::VoxelGrid<PointType> downSizepointcloudmap;
     pcl::PointCloud<PointType>::Ptr DSpointcloudmap(new pcl::PointCloud<PointType>());//地图点云
 
-    // downSizepointcloudmap.setInputCloud(pointcloudmap);
-    // downSizepointcloudmap.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
-    // downSizepointcloudmap.filter(*pointcloudmap);
+    downSizepointcloudmap.setInputCloud(pointcloudmap);
+    downSizepointcloudmap.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
+    downSizepointcloudmap.filter(*pointcloudmap);
 
     //需要对地图点云降采样，不然在rviz里显示太卡
     downSizepointcloudmap.setInputCloud(pointcloudmap);
@@ -2789,51 +2446,20 @@ extrinR = result_vector;
 
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
-    
-    int transform_calc_counter = 0;
 
     while (ros::ok())
     {
         if (flg_exit) break;
         ros::spinOnce();
 
-        // 重定位逻辑
-        if(current_robot_id == 0) {
-            // robot_0的重定位逻辑
-            std::lock_guard<std::mutex> lock(enter_key_mutex);
-            if(enter_key_pressed && map_data_ready && need_relocal) {
-                // 加载共享地图数据进行重定位
-                pcl::PointCloud<PointType>::Ptr mapData(new pcl::PointCloud<PointType>());
-                double maxZ, minZ;
-                if(getSharedMapData(mapData, maxZ, minZ)) {
-                    // 使用mapData进行重定位初始化
-                    *pointcloudmap = *mapData;
-                    max_z = maxZ;
-                    min_z = minZ;
-                    
-                    // 重新初始化地图管理器
-                    // 先保存mapData为临时PCD文件
-                    string temp_pcd_path = "/tmp/shared_map.pcd";
-                    pcl::PCDWriter pcd_writer;
-                    pcd_writer.write(temp_pcd_path, *mapData);
-                    
-                    // 使用set_input_PCD方法
-                    MM.set_input_PCD(temp_pcd_path);
-                    MM.voxel_process();
-                    
-                    cout << "Loaded shared map data for relocalization, starting relocalization..." << endl;
-                    enter_key_pressed = false; // 重置标志
-                }
-            }
-        }
-
+        //重定位
         ReLocalization();
-        std::cout<<"nononononononono!!!!!!!!!!!"<<std::endl;
+
 
         if(sync_packages(Measures))  //把一次的IMU和LIDAR数据打包到Measures
         {
-            std::cout<<"sync_packages(Measures)!!!!!!!!!!!"<<std::endl;
-            if(current_robot_id == 0 && need_relocal==true)
+
+            if(need_relocal==true)
             {
                 continue;
             }
@@ -2986,10 +2612,9 @@ extrinR = result_vector;
             // cout<<"滤波后："<<state_point.pos[0]<<","<<state_point.pos[1]<<","<<state_point.pos[2]<<endl;
             // cout<<endl;
 
-            std::cout<<"AAAAAAAAAAAAAAAAAAAA!!!!!!!!!!!"<<std::endl;
+
             if(pub_firstodo_en)
             {
-              std::cout<<"pub_firstodo_en!!!!!!!!!!!!"<<std::endl;
               if (count_first_odometry == 0)
               {
                   odom_all.pose.pose.position.x = state_point.pos[0];
@@ -3129,56 +2754,11 @@ extrinR = result_vector;
                     //cloudInfo.imuAvailable = cloudKeyPoses6D->size() - 1;
                     
                     pubKeyFrames.publish(keyframe_info);
-                    
-                    // 保存关键帧点云到surfCloudKeyFrames
-                    surfCloudKeyFrames.push_back(laserCloudIMUBody);
-                    
-                    // 保存关键帧位置到cloudKeyPoses3D
-                    PointType thisPose3D;
-                    thisPose3D.x = keyframe_pose.x;
-                    thisPose3D.y = keyframe_pose.y;
-                    thisPose3D.z = keyframe_pose.z;
-                    thisPose3D.intensity = keyframe_count; // 使用关键帧索引作为intensity
-                    cloudKeyPoses3D->points.push_back(thisPose3D);
-                    
                     keyframe_count++;
                     state_point_lastframe = state_point;//更新上一关键帧位姿
 
                     cout<<"keyframe true:"<<keyframe_count<<endl;
-                    ROS_INFO("keyframe:t=%lf,x=%f,y=%f,z=%f,roll=%f,pitch=%f,yaw=%f",keyframe_pose.time,keyframe_pose.x,keyframe_pose.y,keyframe_pose.z,keyframe_pose.roll,keyframe_pose.pitch,keyframe_pose.yaw);
-                    
-                    // robot_2的构图逻辑
-                    if(current_robot_id == 2) {
-                        // 添加构图开始提示
-                        static bool mapping_started = false;
-                        if(!mapping_started) {
-                            cout << "已经开始构图 - Robot ID 02 进入构图循环" << endl;
-                            mapping_started = true;
-                        }
-                        
-                        // 检查是否按下回车键来保存地图
-                        std::lock_guard<std::mutex> lock(enter_key_mutex);
-                        if(enter_key_pressed) {
-                            saveMapToMemory();
-                            enter_key_pressed = false;
-                            cout << "Map saved to memory by robot_2, robot_0 can now start localization" << endl;
-                        }
-                        
-                        // 或者每50个关键帧自动保存一次
-                        if(keyframe_count % 50 == 0 && keyframe_count > 0) {
-                            saveMapToMemory();
-                        }
-                    }
-                    
-                    // robot_0的重定位逻辑
-                    if(current_robot_id == 0) {
-                        std::lock_guard<std::mutex> lock(enter_key_mutex);
-                        if(enter_key_pressed) {
-                            saveMapToMemory();
-                            enter_key_pressed = false;
-                            cout << "Map saved to memory, robot_0 can now start localization" << endl;
-                        }
-                    } 
+                    ROS_INFO("keyframe:t=%lf,x=%f,y=%f,z=%f,roll=%f,pitch=%f,yaw=%f",keyframe_pose.time,keyframe_pose.x,keyframe_pose.y,keyframe_pose.z,keyframe_pose.roll,keyframe_pose.pitch,keyframe_pose.yaw); 
                 }
             }
             
@@ -3226,19 +2806,10 @@ extrinR = result_vector;
             double time_all4 = omp_get_wtime();
 
             double yaw = atan2(state_point.rot.matrix()(1,0),state_point.rot.matrix()(0,0)) * 180 / M_PI;
-            
-            // 在处理完成后发布当前机器人位姿
-            publishCurrentRobotPose();
-            
-            // 每隔一定帧数计算并发布坐标变换
-            transform_calc_counter++;
-            if (transform_calc_counter >= 10) { // 每10帧计算一次变换
-                calculateAndPublishTransform();
-                transform_calc_counter = 0;
-            }
         }
 
         rate.sleep();
+
 
         //发布传感器的有效性
         publish_sensor_vaild();
@@ -3262,11 +2833,6 @@ extrinR = result_vector;
     }
 
     ikdtreethread.join();
-    
-    // 程序结束时保存地图（robot_2）
-    if(current_robot_id == 2) {
-        saveMapToMemory();
-    }
 
     return 0;
 }
