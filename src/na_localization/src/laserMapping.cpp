@@ -2671,7 +2671,11 @@ extrinR = result_vector;
 
     // 根据robot_id订阅主要处理的话题
     if(current_robot_id == 2) {
-        sub_pcl = nh.subscribe("/jackal2/livox/lidar", 1, robot2_pcl_cbk);
+        // sub_pcl = nh.subscribe("/jackal2/point_local_octree", 1, robot2_pcl_cbk);
+        // sub_imu = nh.subscribe("/jackal2/point_local_octree", 1, robot2_imu_cbk);
+        sub_pcl = nh.subscribe("/livox/lidar", 1, robot2_pcl_cbk);
+        sub_imu = nh.subscribe("/livox/imu", 1, robot2_imu_cbk);
+    
         cout << "Robot 2: 构图模式启动" << endl;
 
         // 启动键盘输入监听线程 - 移动到这里更合理
@@ -2679,7 +2683,8 @@ extrinR = result_vector;
         keyboard_thread.detach();
         cout << "键盘监听线程已启动，按回车键保存地图并通知robot_0开始重定位" << endl;
     } else if(current_robot_id == 0) {
-        sub_pcl = nh.subscribe("/jackal0/livox/lidar", 1, robot0_pcl_cbk);
+        sub_pcl = nh.subscribe("/jackal0/point_local_octree", 1, robot0_pcl_cbk);
+        // sub_imu = nh.subscribe("/jackal0/point_local_octree", 1, robot0_imu_cbk);
         cout << "Robot 0: Relocalization mode activated" << endl;
     }
 
@@ -3040,12 +3045,26 @@ extrinR = result_vector;
 
 
             state_point = kf.get_x();
+            std::cout << "卡尔曼滤波状态更新成功" << std::endl;
+        // 检查state_point是否有效
+        std::cout << "状态点位置: " << state_point.pos.transpose() << std::endl;
+        std::cout << "状态点旋转矩阵有效性: " << (state_point.rot.matrix().allFinite() ? "有效" : "无效") << std::endl;
+
+        // 安全地访问四元数
+        try {
+            auto quat = state_point.rot.unit_quaternion();
+            std::cout << "四元数: w=" << quat.w() << ", x=" << quat.x() << ", y=" << quat.y() << ", z=" << quat.z() << std::endl;
+        } catch (const std::exception& e) {
+            std::cout << "四元数访问失败: " << e.what() << std::endl;
+        }   
+        
             pos_lid = state_point.pos + state_point.rot.matrix() * state_point.offset_T_L_I;
             // printf("雷达结束时间： %7.7lf \n",lidar_end_time);
             // cout<<"滤波后："<<state_point.pos[0]<<","<<state_point.pos[1]<<","<<state_point.pos[2]<<endl;
             // cout<<endl;
 
             std::cout<<"AAAAAAAAAAAAAAAAAAAA!!!!!!!!!!!"<<std::endl;
+            /*
             if(pub_firstodo_en)
             {
               std::cout<<"pub_firstodo_en!!!!!!!!!!!!"<<std::endl;
@@ -3125,6 +3144,7 @@ extrinR = result_vector;
                     count_first_odometry++;
               }
             }
+            */
                    //关键帧提取
             if(!pub_firstodo_en)
             {
