@@ -569,11 +569,37 @@ void livox_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg)
 
 // sensor_msgs::PointCloud2 overlap_cloud;
 // robot_0的点云回调函数
-void robot0_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
-    std::cout << "接收到id0的点云" << std::endl;
+void robot0_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg) {
+    std::cout << "接收到id0的livox点云" << std::endl;
     if(current_robot_id == 0) {
-        // 处理robot_0的点云数据
-        standard_pcl_cbk(msg);
+        // 处理robot_0的livox点云数据
+        mtx_buffer.lock();
+        if(!first_lidar)
+            first_lidar = true;
+        double preprocess_start_time = omp_get_wtime();
+        scan_count ++;
+        if (msg->header.stamp.toSec() < last_timestamp_lidar)
+        {
+            ROS_ERROR("lidar loop back, clear buffer");
+            lidar_buffer.clear();
+        }
+
+        PointCloudXYZI::Ptr  ptr(new PointCloudXYZI());
+        p_pre->process(msg, ptr); //把livox消息类型转换成pcl
+
+        lidar_buffer.clear();
+        time_buffer.clear();
+        time_end_buffer.clear();
+
+        lidar_buffer.push_back(ptr);
+        time_end_buffer.push_back(msg->header.stamp.toSec()+ptr->points.back().curvature/1000.0);
+
+        time_buffer.push_back(msg->header.stamp.toSec());
+        last_timestamp_lidar = msg->header.stamp.toSec();
+
+        mtx_buffer.unlock();
+        sig_buffer.notify_all();
+        
         std::cout << "=====ID000=====" << std::endl;
     }
 }
@@ -588,11 +614,37 @@ void robot0_imu_cbk(const sensor_msgs::Imu::ConstPtr &msg) {
 }
 
 // robot_2的点云回调函数
-void robot2_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) {
-    std::cout << "接收到id2的点云" << std::endl;
+void robot2_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg) {
+    std::cout << "接收到id2的livox点云" << std::endl;
     if(current_robot_id == 2) {
-        // 处理robot_2的点云数据
-        standard_pcl_cbk(msg);
+        // 处理robot_2的livox点云数据
+        mtx_buffer.lock();
+        if(!first_lidar)
+            first_lidar = true;
+        double preprocess_start_time = omp_get_wtime();
+        scan_count ++;
+        if (msg->header.stamp.toSec() < last_timestamp_lidar)
+        {
+            ROS_ERROR("lidar loop back, clear buffer");
+            lidar_buffer.clear();
+        }
+
+        PointCloudXYZI::Ptr  ptr(new PointCloudXYZI());
+        p_pre->process(msg, ptr); //把livox消息类型转换成pcl
+
+        lidar_buffer.clear();
+        time_buffer.clear();
+        time_end_buffer.clear();
+
+        lidar_buffer.push_back(ptr);
+        time_end_buffer.push_back(msg->header.stamp.toSec()+ptr->points.back().curvature/1000.0);
+
+        time_buffer.push_back(msg->header.stamp.toSec());
+        last_timestamp_lidar = msg->header.stamp.toSec();
+
+        mtx_buffer.unlock();
+        sig_buffer.notify_all();
+        
         std::cout << "=====ID222=====" << std::endl;
     }
 }
@@ -2619,7 +2671,7 @@ extrinR = result_vector;
 
     // 根据robot_id订阅主要处理的话题
     if(current_robot_id == 2) {
-        sub_pcl = nh.subscribe("/jackal2/point_local_octree", 1, robot2_pcl_cbk);
+        sub_pcl = nh.subscribe("/jackal2/livox/lidar", 1, robot2_pcl_cbk);
         cout << "Robot 2: 构图模式启动" << endl;
 
         // 启动键盘输入监听线程 - 移动到这里更合理
@@ -2627,7 +2679,7 @@ extrinR = result_vector;
         keyboard_thread.detach();
         cout << "键盘监听线程已启动，按回车键保存地图并通知robot_0开始重定位" << endl;
     } else if(current_robot_id == 0) {
-        sub_pcl = nh.subscribe("/jackal0/point_local_octree", 1, robot0_pcl_cbk);
+        sub_pcl = nh.subscribe("/jackal0/livox/lidar", 1, robot0_pcl_cbk);
         cout << "Robot 0: Relocalization mode activated" << endl;
     }
 
