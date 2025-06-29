@@ -879,9 +879,16 @@ bool flag_roswarn_lidar = false;
 //把当前要处理的LIDAR和IMU数据打包到meas
 bool sync_packages(MeasureGroup &meas)
 {
-    // cout<<"1.1"<<endl;  
+    // 添加调试输出
+    cout << "=== sync_packages调试信息 ===" << endl;
+    cout << "first_lidar: " << first_lidar << endl;
+    cout << "imu_vaild: " << imu_vaild << endl;
+    cout << "imu_buffer.size(): " << imu_buffer.size() << endl;
+    cout << "last_timestamp_imu: " << last_timestamp_imu << endl;
+    
     if(!first_lidar)
     {
+        cout << "返回false: first_lidar未设置" << endl;
         return false;
     }
     
@@ -2828,7 +2835,7 @@ extrinR = result_vector;
         }
 
         ReLocalization();
-        std::cout<<"nononononononono!!!!!!!!!!!"<<std::endl;
+
 
         if(sync_packages(Measures))  //把一次的IMU和LIDAR数据打包到Measures
         {
